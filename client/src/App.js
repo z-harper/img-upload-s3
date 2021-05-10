@@ -3,28 +3,31 @@ import axios from 'axios';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState();
-  const [filename, setFilename] = useState('');
+  const [imgName, setImgName] = useState('');
   const [uploadedImages, setUploadedImages] = useState([]);
-
-  const postImage = async ({image, filename}) => {
-    // FormData - https://developer.mozilla.org/en-US/docs/Web/API/FormData
-    const formData = new FormData();
-    formData.append("image", image);
-    formData.append("filename", filename);
-  
-    const result = await axios.post("http://localhost:5050/images", formData, {
-      headers: {'Content-Type': 'multipart/form-data'}
-    });
-
-    setUploadedImages([...uploadedImages, {imgKey: result.data.key, imgUrl: result.data.Location}])
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await postImage({image: selectedFile, filename});
-    // image urls 
-    setSelectedFile();
-    setFilename('');
+    try {
+      // get secure s3 url from server
+      const result = await axios.get("http://localhost:5050/s3Url");
+      let uploadUrl = result.data.s3Url;
+      // post image to s3 using generated url from our server
+      await axios.put(
+        uploadUrl, 
+        selectedFile, 
+        { headers: {'Content-Type': 'imageFile.type'} }
+      );
+      // break url at ? to only return url + 32char hex string
+      uploadUrl = uploadUrl.split('?')[0];
+      const uploadKey = uploadUrl.split('com/')[1];
+      console.log(uploadUrl);
+      // set new image uplaod in state
+      setUploadedImages([...uploadedImages, {imgKey: uploadKey, imgUrl: uploadUrl, imgName: imgName}])
+      // can then make post request to our server with image data we want to store ie url, key, name
+    } catch (err) {
+      console.log(err);
+    }
   }
 
   return (
@@ -37,7 +40,7 @@ function App() {
           </p>
           <p>
             <label htmlFor="name">Name: </label>
-            <input type="text" name="name" id="name" onChange={e => setFilename(e.target.value)} />
+            <input type="text" name="name" id="name" onChange={e => setImgName(e.target.value)} />
           </p>
           <p>
             <button type="submit">Upload to S3</button>
@@ -45,10 +48,10 @@ function App() {
         </fieldset>
       </form>
       
-
       { uploadedImages.map( image => (
         <div key={image.imgKey}>
           <img src={image.imgUrl} alt='img' />
+          <p>{image.imgName}</p>
         </div>
       ))}
     </div>

@@ -1,6 +1,8 @@
 import S3 from 'aws-sdk/clients/s3.js';
-import fs from 'fs';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
+import { promisify } from 'util';
+const randomBytes = promisify(crypto.randomBytes);
 
 dotenv.config();
 
@@ -14,21 +16,22 @@ const secretAccessKey = process.env.AWS_SECRET_KEY;
 const s3 = new S3({
   region,
   accessKeyId,
-  secretAccessKey
+  secretAccessKey,
+  signatureVersion: 'v4'
 })
 
 // Upload file to s3
-export const uploadToS3 = (file) => {
-  const fileStream = fs.createReadStream(file.path);
+export const generateUploadUrl = async () => {
+  const rawBytes = await randomBytes(16);  // generate 16 random bytes
+  const imageName = rawBytes.toString('hex');  // convert to 32 char hex string
 
-  const uploadParams = {
+  const params = {
     Bucket: bucketName,
-    Body: fileStream,
-    Key: file.filename,
-    ContentType: 'image/jpeg'
+    Key: imageName,
+    Expires: 60
   }
-
-  return s3.upload(uploadParams).promise();
+  const uploadUrl = await s3.getSignedUrlPromise('putObject', params);
+  return uploadUrl;  
 }
 
 
